@@ -7,8 +7,8 @@ Handle DB = INVALID_HANDLE;
 
 int ServerPort = 0; 
 int ServerID = 0;
-int PlayerBuy[64 + 1];
-int PlayerBuyCache[64 + 1];
+int PlayerBuy[66];
+int PlayerBuyCache[66];
 
 char TextSMS[64]; 
 char ServerIP[64]; 
@@ -16,7 +16,7 @@ char ShopURL[64];
 
 public Plugin myinfo = 
 { 
-	name = "Online Shop [v0.7]", 
+	name = "Online Shop [v1.3.5]", 
 	author = "Sloenthran", 
 	description = "Online Shop", 
 	url = "sloenthran.pl" 
@@ -36,7 +36,7 @@ public void OnPluginStart()
  	GetConVarString(FindConVar("ip"), ServerIP, sizeof(ServerIP));
  	GetConVarString(FindConVar("onlineshop_url"), ShopURL, sizeof(ShopURL));
 	
-	RegConsoleCmd("sm_sklepsms", TwoMenu); 
+	RegConsoleCmd("sm_sklepsms", GlobalMenu); 
 	RegConsoleCmd("say", CheckSay); 
 	RegConsoleCmd("team_say", CheckSay);
 	
@@ -44,8 +44,8 @@ public void OnPluginStart()
 	
 	if(DB == INVALID_HANDLE) 
 	{ 
-		LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL]: %s", Error); 
-		SetFailState("Not connect to MySQL server"); 
+		LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL OnPluginStart #1]: %s", Error); 
+		SetFailState("Not connect to MySQL server!"); 
 	}
 	
 	Format(Query, sizeof(Query), "SELECT `id` FROM `servers` WHERE `ip`='%s' AND `port`='%i' LIMIT 1", ServerIP, ServerPort); 
@@ -58,7 +58,7 @@ public void OnPluginStart()
 		{ 
 			ServerID = SQL_FetchInt(QueryDB, 0); 
 		} 
-	} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL] %s", Error); }
+	} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL OnPluginStart #2] %s", Error); }
 		
 	Format(Query, sizeof(Query), "SELECT `value` FROM `settings` WHERE `name`='text_sms' LIMIT 1"); 
 	
@@ -70,7 +70,7 @@ public void OnPluginStart()
 		{ 
 			SQL_FetchString(QueryDB, 0, TextSMS, sizeof(TextSMS)); 
 		} 
-	} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL] %s", Error); }
+	} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL OnPluginStart #3] %s", Error); }
 }
 
 public void OnClientPutInServer(User) 
@@ -80,13 +80,72 @@ public void OnClientPutInServer(User)
 	GiveFlag(User);
 }
 
-public void OneMenu(int User, int Arg)
+public void GiveFlag(int User)
+{
+	char Error[256];
+	
+	if(IsClientInGame(User))
+	{
+		char SID[64];
+		char Query[256];
+		
+		GetClientAuthId(User, AuthId_Engine, SID, sizeof(SID));
+		
+		Format(Query, sizeof(Query), "SELECT `flags` FROM `premium` WHERE `server`='%i' AND `nick`='%s'", ServerID, SID); Handle QueryDB = SQL_Query(DB, Query);
+			
+		if(QueryDB != INVALID_HANDLE)
+		{
+			if(SQL_FetchRow(QueryDB))
+			{
+				char Flags[64];
+				
+				SQL_FetchString(QueryDB, 0, Flags, sizeof(Flags));
+				
+				int FlagsInt = ReadFlagString(Flags);
+				
+				SetUserFlagBits(User, FlagsInt);	
+			}
+		}
+	} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL GiveFlag] %s", Error); }
+}
+
+/////////////////////////////////////////////////// Menu //////////////////////////////////////////////////////
+
+public Action GlobalMenu(int User, int Arg)
+{
+	Handle OpenMenu = CreateMenu(HandleGlobalMenu);
+	SetMenuTitle(OpenMenu, "*Online Shop by Sloenthran*");
+	AddMenuItem(OpenMenu, "1", "Zakup usługę");
+	AddMenuItem(OpenMenu, "2", "Moje usługi");
+	SetMenuPagination(OpenMenu, 7);
+	SetMenuExitButton(OpenMenu, true);
+	DisplayMenu(OpenMenu, User, 250);
+}
+
+public int HandleGlobalMenu(Handle MenuID, MenuAction Data, int User, int Info)
+{
+	if(Data == MenuAction_Select)
+	{
+		char Item[16];
+
+		GetMenuItem(MenuID, Info, Item, sizeof(Item));
+		
+		if(StrEqual(Item, "1")) { BuyMenu(User, 0); }
+		else if(StrEqual(Item, "2")) { MyServiceMenu(User, 0); }
+	} else if(Data == MenuAction_End) { CloseHandle(MenuID); }
+}
+
+////////////////////////////////////////////////// End Menu ///////////////////////////////////////////////////
+
+////////////////////////////////////////////////// Buy Menu ///////////////////////////////////////////////////
+
+public void BuyMenu(int User, int Arg)
 {
 	char Query[256];
 	
-	Handle ShopOneMenu = CreateMenu(OneMenuHandle);
+	Handle OpenMenu = CreateMenu(BuyMenuHandle);
 	
-	SetMenuTitle(ShopOneMenu, "*Online Shop by Sloenthran*\nWybierz usługę");
+	SetMenuTitle(OpenMenu, "*Online Shop by Sloenthran*\nWybierz usługę");
 	
 	Format(Query, sizeof(Query), "SELECT `id`, `name` FROM `buy` WHERE `server`='%i' OR `server`='0'", ServerID); 
 	
@@ -95,49 +154,47 @@ public void OneMenu(int User, int Arg)
 	if(QueryDB != INVALID_HANDLE)
 	{
 		while(SQL_FetchRow(QueryDB))
-		{		
+		{
 			char Name[64]; 
-			char PremiumName[128]; 
+			char PremiumName[128];
 			char PremiumID[16];
 			
 			int ID = SQL_FetchInt(QueryDB, 0); 
 			
 			SQL_FetchString(QueryDB, 1, Name, sizeof(Name));
 			
-			Format(PremiumName, sizeof(PremiumName), "%s", Name); 
+			Format(PremiumName, sizeof(PremiumName), "%s", Name);
 			Format(PremiumID, sizeof(PremiumID), "%i", ID);
 			
-			AddMenuItem(ShopOneMenu, PremiumID, PremiumName);
+			AddMenuItem(OpenMenu, PremiumID, PremiumName);
 		}
-	} else { char Error[256]; SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL] %s", Error); }
+	} else { char Error[256]; SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL BuyMenu] %s", Error); }
 
-	AddMenuItem(ShopOneMenu, "back", "Powrót");
-	SetMenuPagination(ShopOneMenu, 7);
-	SetMenuExitButton(ShopOneMenu, true);
-	DisplayMenu(ShopOneMenu, User, 250);
+	AddMenuItem(OpenMenu, "back", "Powrót");
+	SetMenuPagination(OpenMenu, 7);
+	SetMenuExitButton(OpenMenu, true);
+	DisplayMenu(OpenMenu, User, 250);
 }
 
-public int OneMenuHandle(Handle MenuID, MenuAction Data, int User, int Info)
+public int BuyMenuHandle(Handle MenuID, MenuAction Data, int User, int Info)
 {
 	if(Data == MenuAction_Select)
 	{
 		char Item[16]; 
-		char Error[256];
-		char Query[256];
-		char BuyID[16];
 
 		GetMenuItem(MenuID, Info, Item, sizeof(Item));
 		
-		Format(BuyID, sizeof(BuyID), "%i", Info);
-		
 		if(StrEqual(Item, "back")) 
 		{ 
-			TwoMenu(User, 0); 
+			GlobalMenu(User, 0); 
 		}
-		else {
-			Handle ShopFourMenu = CreateMenu(FourMenuHandle);
+		else 
+		{
+			char Query[256];
+			
+			Handle OpenMenu = CreateMenu(DaysMenuHandle);
 	
-			SetMenuTitle(ShopFourMenu, "*Online Shop by Sloenthran*\nWybierz ilość dni");
+			SetMenuTitle(OpenMenu, "*Online Shop by Sloenthran*\nWybierz ilość dni");
 			
 			Format(Query, sizeof(Query), "SELECT `id`, `days` FROM `service` WHERE `buy_id`='%s'", Item); Handle QueryDB = SQL_Query(DB, Query);
 			
@@ -154,33 +211,35 @@ public int OneMenuHandle(Handle MenuID, MenuAction Data, int User, int Info)
 					Format(PremiumName, sizeof(PremiumName), "%i", Days); 
 					Format(PremiumID, sizeof(PremiumID), "%i", ID);
 			
-					AddMenuItem(ShopFourMenu, PremiumID, PremiumName);
+					AddMenuItem(OpenMenu, PremiumID, PremiumName);
 				}
-			} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL] %s", Error); }
+			} else { char Error[256]; SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL BuyMenuHandle] %s", Error); }
 			
-			SetMenuPagination(ShopFourMenu, 7);
-			SetMenuExitButton(ShopFourMenu, true);
-			AddMenuItem(ShopFourMenu, "back", "Powrót");
-			DisplayMenu(ShopFourMenu, User, 250);
+			SetMenuPagination(OpenMenu, 7);
+			SetMenuExitButton(OpenMenu, true);
+			AddMenuItem(OpenMenu, "back", "Powrót");
+			DisplayMenu(OpenMenu, User, 250);
 		}
 	} else if(Data == MenuAction_End) { CloseHandle(MenuID); }
 }
 
-public int FourMenuHandle(Handle MenuID, MenuAction Data, int User, int Info)
+public int DaysMenuHandle(Handle MenuID, MenuAction Data, int User, int Info)
 {
 	if(Data == MenuAction_Select)
 	{
-		char Item[16]; 
-		char Error[256];
-		char Query[256];
+		char Item[16];
 
 		GetMenuItem(MenuID, Info, Item, sizeof(Item));
 		
 		if(StrEqual(Item, "back")) 
 		{ 
-			OneMenu(User, 0); 
+			BuyMenu(User, 0); 
 		}
-		else {
+		else 
+		{
+			char Error[256];
+			char Query[256];
+			
 			PlayerBuyCache[User] = StringToInt(Item);
 			
 			Format(Query, sizeof(Query), "SELECT `price_id`, `days`, `buy_id` FROM `service` WHERE `id`='%s'", Item); Handle QueryDB = SQL_Query(DB, Query);
@@ -217,48 +276,24 @@ public int FourMenuHandle(Handle MenuID, MenuAction Data, int User, int Info)
 									
 									Format(Query, sizeof(Query), "*Online Shop by Sloenthran*\n Aby zakupić %s [%i dni] wyślij SMS-a o treści %s na numer %i\nNastępnie naciśnij na OK i podaj kod zwrotny w wiadomości na czacie.\nCałkowity koszt SMS-a wynosi %s", Name, Days, TextSMS, Number, VAT);
 							
-									Handle ShopThreeMenu = CreateMenu(ThreeMenuHandle);
-									SetMenuTitle(ShopThreeMenu, Query);
-									AddMenuItem(ShopThreeMenu, "ok", "OK");
-									SetMenuPagination(ShopThreeMenu, 7);
-									SetMenuExitButton(ShopThreeMenu, true);
-									AddMenuItem(ShopThreeMenu, "back", "Powrót");
-									DisplayMenu(ShopThreeMenu, User, 250);
+									Handle OpenMenu = CreateMenu(ConfirmMenuHandle);
+									SetMenuTitle(OpenMenu, Query);
+									AddMenuItem(OpenMenu, "ok", "OK");
+									SetMenuPagination(OpenMenu, 7);
+									SetMenuExitButton(OpenMenu, true);
+									AddMenuItem(OpenMenu, "back", "Powrót");
+									DisplayMenu(OpenMenu, User, 250);
 								}
-							} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL] %s", Error); }
+							} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL DaysMenuHandle #1] %s", Error); }
 						}
-					} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL] %s", Error); }
+					} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL  DaysMenuHandle #2] %s", Error); }
 				}
-			} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL] %s", Error); }
+			} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL  DaysMenuHandle #3] %s", Error); }
 		}
 	} else if(Data == MenuAction_End) { CloseHandle(MenuID); }
 }
 
-public Action TwoMenu(int User, int Arg)
-{
-	Handle ShopTwoMenu = CreateMenu(TwoMenuHandle);
-	SetMenuTitle(ShopTwoMenu, "*Online Shop by Sloenthran*");
-	AddMenuItem(ShopTwoMenu, "1", "Zakup usługę");
-	AddMenuItem(ShopTwoMenu, "2", "Moje usługi");
-	SetMenuPagination(ShopTwoMenu, 7);
-	SetMenuExitButton(ShopTwoMenu, true);
-	DisplayMenu(ShopTwoMenu, User, 250);
-}
-
-public int TwoMenuHandle(Handle MenuID, MenuAction Data, int User, int Info)
-{
-	if(Data == MenuAction_Select)
-	{
-		char Item[16];
-
-		GetMenuItem(MenuID, Info, Item, sizeof(Item));
-		
-		if(StrEqual(Item, "1")) { OneMenu(User, 0); }
-		else if(StrEqual(Item, "2")) { MyServiceMenu(User, 0); }
-	} else if(Data == MenuAction_End) { CloseHandle(MenuID); }
-}
-
-public int ThreeMenuHandle(Handle MenuID, MenuAction Data, int User, int Info)
+public int ConfirmMenuHandle(Handle MenuID, MenuAction Data, int User, int Info)
 {
 	if(Data == MenuAction_Select)
 	{
@@ -267,38 +302,71 @@ public int ThreeMenuHandle(Handle MenuID, MenuAction Data, int User, int Info)
 		GetMenuItem(MenuID, Info, Item, sizeof(Item));
 		
 		if(StrEqual(Item, "ok")) { PlayerBuy[User] = true; }
-		else { OneMenu(User, 0); }
+		else { BuyMenu(User, 0); }
 	} else if(Data == MenuAction_End) { CloseHandle(MenuID); }
 }
 
-//////////////////////////////////////////////// My Services ////////////////////////////////////////////////
+////////////////////////////////////////////////// End Buy Menu ///////////////////////////////////////////////
+
+////////////////////////////////////////////////// My Services ////////////////////////////////////////////////
 
 public Action MyServiceMenu(int User, int Arg)
 {
 	char SID[64];
 	char Error[256];
 	char Query[256];
+	char CharID[16];
 				
 	GetClientAuthId(User, AuthId_Engine, SID, sizeof(SID));
 	
-	Format(Query, sizeof(Query), "SELECT `time`, `premium_id`, `id` FROM `premium_cache` WHERE `nick`='%s' AND `server`='%i'", SID, ServerID); Handle QueryDB = SQL_Query(DB, Query);
+	Format(Query, sizeof(Query), "SELECT `time`, `premium_id` FROM `premium_cache` WHERE `nick`='%s' AND `server`='%i'", SID, ServerID); Handle QueryDB = SQL_Query(DB, Query);
 	
 	if(QueryDB != INVALID_HANDLE)
 	{
-
+		Handle OpenMenu = CreateMenu(HandleMyServiceMenu);
+		
 		while(SQL_FetchRow(QueryDB))
 		{
-			int Time = SQL_FetchInt(QueryDB, 0); int PremiumID = SQL_FetchInt(QueryDB, 1); int ID = SQL_FetchInt(QueryDB, 2);
+			int Time = SQL_FetchInt(QueryDB, 0); int PremiumID = SQL_FetchInt(QueryDB, 1);
 			
-			Format(Query, sizeof(Query), "SELECT `name` FROM `buy` WHERE `id`='%i'", PremiumID); Handle QueryDB = SQL_Query(DB, Query);
+			Format(Query, sizeof(Query), "SELECT `name` FROM `buy` WHERE `id`='%i'", PremiumID); QueryDB = SQL_Query(DB, Query);
 			
 			if(QueryDB != INVALID_HANDLE)
 			{
+				while(SQL_FetchRow(QueryDB))
+				{
+					char Name[128];
+					char PremiumName[256];
 				
+					SQL_FetchString(QueryDB, 0, Name, sizeof(Name));
+				
+					int Diff = Time - GetTime();
+					int Days = Diff / 86400;
+				
+					Diff = Diff - (Days * 86400);
+				
+					int Hours = Diff / 3600;
+				
+					Diff = Diff - (Hours * 3600);
+				
+					int Minutes = Diff / 60;
+					int Seconds = Diff - (Minutes * 60);
+					
+					if(Days > 10000) { Format(PremiumName, sizeof(PremiumName), "%s [Na zawsze]", Name); }
+					else { Format(PremiumName, sizeof(PremiumName), "%s [%i dni, %i godzin, %i minut, %i sekund]", Name, Days, Hours, Minutes, Seconds); }
+					
+					Format(CharID, sizeof(CharID), "%i", PremiumID);
+				
+					AddMenuItem(OpenMenu, CharID, PremiumName);
+				}
 			} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL] %s", Error); }
 		}
+		
+		SetMenuPagination(OpenMenu, 7);
+		SetMenuExitButton(OpenMenu, true);
+		AddMenuItem(OpenMenu, "back", "Powrót");
+		DisplayMenu(OpenMenu, User, 250);
 	} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL] %s", Error); }
-	
 }
 
 public int HandleMyServiceMenu(Handle MenuID, MenuAction Data, int User, int Info)
@@ -308,10 +376,50 @@ public int HandleMyServiceMenu(Handle MenuID, MenuAction Data, int User, int Inf
 		char Item[16];
 
 		GetMenuItem(MenuID, Info, Item, sizeof(Item));
+		
+		if(StrEqual(Item, "back")) 
+		{ 
+			GlobalMenu(User, 0); 
+		}
+		else 
+		{
+			char Query[256];
+			
+			Handle OpenMenu = CreateMenu(DaysMenuHandle);
+	
+			SetMenuTitle(OpenMenu, "*Online Shop by Sloenthran*\nWybierz ilość dni");
+			
+			Format(Query, sizeof(Query), "SELECT `id`, `days` FROM `service` WHERE `buy_id`='%s'", Item); Handle QueryDB = SQL_Query(DB, Query);
+			
+			if(QueryDB != INVALID_HANDLE)
+			{
+				while(SQL_FetchRow(QueryDB))
+				{	
+					char PremiumName[128]; 
+					char PremiumID[16];
+			
+					int ID = SQL_FetchInt(QueryDB, 0); 
+					int Days = SQL_FetchInt(QueryDB, 1);
+			
+					Format(PremiumName, sizeof(PremiumName), "%i", Days); 
+					Format(PremiumID, sizeof(PremiumID), "%i", ID);
+			
+					AddMenuItem(OpenMenu, PremiumID, PremiumName);
+				}
+			} else { char Error[256]; SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL HandleMySerivceMenu] %s", Error); }
+			
+			SetMenuPagination(OpenMenu, 7);
+			SetMenuExitButton(OpenMenu, true);
+			AddMenuItem(OpenMenu, "back", "Powrót");
+			DisplayMenu(OpenMenu, User, 250);
+		}
+		
 	} else if(Data == MenuAction_End) { CloseHandle(MenuID); }
 }
 
-////////////////////////////////////////////// End My Services //////////////////////////////////////////////
+////////////////////////////////////////////////// End My Services ////////////////////////////////////////////
+
+////////////////////////////////////////////////// Steam Works ////////////////////////////////////////////////
 
 public Action CheckSay(User, Arg)
 {	
@@ -376,12 +484,11 @@ public int ReturnQueryHTTP(Handle Request, bool Fail, bool CheckSucess, EHTTPSta
 				{
 					if(StrEqual(StringBreak[0], "ok"))
 					{
-						
 						GiveFlag(Number);
 						
 						PrintToChat(Number, "[OnlineShop] Podany przez Ciebie kod jest poprawny!");
 					}
-					else if(StrEqual(StringBreak[0], "extension")){ PrintToChat(Number, "[OnlineShop] Posiadałeś już tą usługę na tym serwerze, więc została ona przedłużona!"); }
+					else if(StrEqual(StringBreak[0], "extension")){ PrintToChat(Number, "[OnlineShop] Kod był poprawny więc ważność Twojej usługi została przedłużona!"); }
 					else { PrintToChat(Number, "[OnlineShop] Kod zwrotny, który podałeś jest błędny!"); }
 					
 					PlayerBuyCache[Number] = 0;
@@ -394,31 +501,4 @@ public int ReturnQueryHTTP(Handle Request, bool Fail, bool CheckSucess, EHTTPSta
 	} else { LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[SteamWorks] Bad status code (%d)!", Status); CloseHandle(Request); return; }
 }
 
-public void GiveFlag(int User)
-{
-	char Error[256];
-	
-	if(IsClientInGame(User))
-	{
-		char SID[64];
-		char Query[256];
-		
-		GetClientAuthId(User, AuthId_Engine, SID, sizeof(SID));
-		
-		Format(Query, sizeof(Query), "SELECT `flags` FROM `premium` WHERE `server`='%i' AND `nick`='%s'", ServerID, SID); Handle QueryDB = SQL_Query(DB, Query);
-			
-		if(QueryDB != INVALID_HANDLE)
-		{
-			if(SQL_FetchRow(QueryDB))
-			{
-				char Flags[64];
-				
-				SQL_FetchString(QueryDB, 0, Flags, sizeof(Flags));
-				
-				int FlagsInt = ReadFlagString(Flags);
-				
-				SetUserFlagBits(User, FlagsInt);	
-			}
-		}
-	} else { SQL_GetError(DB, Error, sizeof(Error)); LogToFile("addons/sourcemod/logs/OnlineShop.txt", "[MySQL] %s", Error); }
-}
+////////////////////////////////////////////////// End Steam Works ////////////////////////////////////////////
