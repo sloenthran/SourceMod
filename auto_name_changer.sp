@@ -5,7 +5,7 @@
 #pragma semicolon 1
 #pragma newdecls required
 
-char CheckWords[85][128];
+char CheckWords[100][128];
 
 public Plugin myinfo = 
 { 
@@ -94,12 +94,30 @@ public void OnPluginStart()
 	Format(CheckWords[74], sizeof(CheckWords[]), "gamers-x.net");
 	Format(CheckWords[75], sizeof(CheckWords[]), "redpot.pro");
 	Format(CheckWords[76], sizeof(CheckWords[]), "casejar.com");
-	Format(CheckWords[77], sizeof(CheckWords[]), ".gg");
-	Format(CheckWords[78], sizeof(CheckWords[]), ".ru");
-	Format(CheckWords[79], sizeof(CheckWords[]), ".pl");
-	Format(CheckWords[80], sizeof(CheckWords[]), ".com");
-	Format(CheckWords[81], sizeof(CheckWords[]), ".net");
-	Format(CheckWords[82], sizeof(CheckWords[]), ".eu");
+	Format(CheckWords[77], sizeof(CheckWords[]), "sklep-skiny.pl");
+	Format(CheckWords[78], sizeof(CheckWords[]), "cebulomat.pl");
+	Format(CheckWords[79], sizeof(CheckWords[]), "gimbomat.pl");
+	Format(CheckWords[80], sizeof(CheckWords[]), "skinboost.gg");
+	Format(CheckWords[81], sizeof(CheckWords[]), "cs-4frags.pl");
+	Format(CheckWords[82], sizeof(CheckWords[]), "csgobestpot.com");
+	Format(CheckWords[83], sizeof(CheckWords[]), "zgame.pl");
+	Format(CheckWords[84], sizeof(CheckWords[]), "csgoreaper.com");
+	Format(CheckWords[85], sizeof(CheckWords[]), "csgoswap.com");
+	Format(CheckWords[86], sizeof(CheckWords[]), "csgofliper.com");
+	Format(CheckWords[87], sizeof(CheckWords[]), "csgopotion.com");
+	Format(CheckWords[88], sizeof(CheckWords[]), "bananki.pl");
+	Format(CheckWords[89], sizeof(CheckWords[]), "casedrop.eu");
+	Format(CheckWords[90], sizeof(CheckWords[]), "csgoloto.com");
+	Format(CheckWords[91], sizeof(CheckWords[]), "csgofliper.com");
+	Format(CheckWords[92], sizeof(CheckWords[]), "csgohunt.com");
+	Format(CheckWords[93], sizeof(CheckWords[]), "csgonecro.com");
+	Format(CheckWords[94], sizeof(CheckWords[]), ".eu");
+	Format(CheckWords[95], sizeof(CheckWords[]), ".pl");
+	Format(CheckWords[96], sizeof(CheckWords[]), ".gg");
+	Format(CheckWords[97], sizeof(CheckWords[]), ".ru");
+	Format(CheckWords[98], sizeof(CheckWords[]), ".com");
+	Format(CheckWords[99], sizeof(CheckWords[]), ".net");
+	
 	
 }
 
